@@ -86,6 +86,86 @@ router.post("/webhook", async (req, res) => {
       return;
     }
 
+    const banListPath = path.join(__dirname, "../data/ban_list.txt");
+
+    // Handle /unban command
+    if (message?.text?.startsWith("/unban")) {
+      const ip = message.text.split(" ")[1];
+
+      if (!ip) {
+        await sendToTelegram(
+          "Please provide an IP address to unban. Usage: /unban ip_address"
+        );
+        return;
+      }
+
+      try {
+        // Create directory if it doesn't exist
+        await fs.ensureDir(path.dirname(banListPath));
+
+        // Read existing ban list
+        let bannedIPs = [];
+        try {
+          const existingContent = await fs.readFile(banListPath, "utf-8");
+          bannedIPs = existingContent.split("\n").filter((ip) => ip.trim());
+        } catch (err) {
+          // File doesn't exist yet
+        }
+
+        if (!bannedIPs.includes(ip)) {
+          await sendToTelegram(`⚠️ IP ${ip} is not in the ban list`);
+          return;
+        }
+
+        // Remove IP from ban list
+        const updatedBanList = bannedIPs.filter((bannedIP) => bannedIP !== ip);
+        await fs.writeFile(banListPath, updatedBanList.join("\n") + "\n");
+        await sendToTelegram(`✅ IP ${ip} has been unbanned successfully`);
+      } catch (error) {
+        console.error("Error managing ban list:", error);
+        await sendToTelegram(
+          `❌ Failed to unban IP ${ip}. Error: ${error.message}`
+        );
+      }
+      return;
+    }
+
+    // Handle /banlist command
+    if (message?.text === "/banlist") {
+      try {
+        // Check if ban list exists
+        if (!(await fs.pathExists(banListPath))) {
+          await sendToTelegram("📝 Ban list is empty");
+          return;
+        }
+
+        // Read and format ban list
+        const banList = await fs.readFile(banListPath, "utf-8");
+        const bannedIPs = banList.split("\n").filter((ip) => ip.trim());
+
+        if (bannedIPs.length === 0) {
+          await sendToTelegram("📝 Ban list is empty");
+          return;
+        }
+
+        const formattedList = bannedIPs
+          .map((ip, index) => `${index + 1}. ${ip}`)
+          .join("\n");
+
+        await sendToTelegram(`
+🚫 <b>Banned IP Addresses:</b>
+
+${formattedList}
+
+Total banned IPs: ${bannedIPs.length}
+        `);
+      } catch (error) {
+        console.error("Error reading ban list:", error);
+        await sendToTelegram("❌ Failed to retrieve ban list");
+      }
+      return;
+    }
+
     // Handle /ban command
     if (message?.text?.startsWith("/ban")) {
       const ip = message.text.split(" ")[1];
@@ -96,8 +176,6 @@ router.post("/webhook", async (req, res) => {
         );
         return;
       }
-
-      const banListPath = path.join(__dirname, "../data/ban_list.txt");
 
       try {
         // Create directory if it doesn't exist
